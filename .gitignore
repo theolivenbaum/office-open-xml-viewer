@@ -77,3 +77,8 @@ TODO.md
 
 # Unicode bidi conformance fixtures (downloaded by the conformance test)
 packages/core/src/text/bidi/__fixtures__/
+
+# Cross-renderer parity bench: the corpus is staged as symlinks into a local
+# checkout of the sample-files repository, never copied or committed.
+packages/*/public/corpus
+packages/*/public/bench-corpus

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>PPTX bench fixture</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { background: #ffffff; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script type="module">
+  import { PptxPresentation } from '/src/index.ts';
+  import { threeD } from '@ooxml-test-three-d-renderer';
+  import { regionMap } from '@ooxml-test-region-map-renderer';
+  import { tiff } from '@ooxml-test-tiff-renderer';
+
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  const dpi = parseFloat(params.get('dpi') ?? '150');
+  const canvas = document.getElementById('canvas');
+
+  try {
+    await document.fonts.ready;
+    const resp = await fetch('/bench-corpus/' + id);
+    if (!resp.ok) throw new Error('fetch failed: ' + resp.status);
+    const pres = await PptxPresentation.load(await resp.arrayBuffer(), { threeD, regionMap, tiff });
+    await pres.waitUntilLayoutComplete();
+    document.body.dataset.pageCount = String(pres.slideCount);
+    // slideWidth/slideHeight are EMU (914400 per inch); the reference prints the
+    // slide at its own size, so scale EMU straight to the comparison DPI.
+    document.body.dataset.slideWidth = String(pres.slideWidth);
+    document.body.dataset.slideHeight = String(pres.slideHeight);
+    window.benchRender = async (slideIndex) => {
+      const width = Math.max(1, Math.round((pres.slideWidth / 914400) * dpi));
+      await pres.renderSlide(canvas, slideIndex, { width, dpr: 1 });
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return { width: canvas.width, height: canvas.height };
+    };
+    document.body.dataset.status = 'ready';
+  } catch (e) {
+    document.body.dataset.status = 'error';
+    document.body.dataset.errorMessage = e instanceof Error ? e.message : String(e);
+  }
+</script>
+</body>
+</html>

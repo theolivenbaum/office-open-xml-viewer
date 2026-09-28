@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>XLSX bench fixture</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { background: #ffffff; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script type="module">
+  import { XlsxWorkbook } from '/src/index.ts';
+  import { threeD } from '@ooxml-test-three-d-renderer';
+  import { regionMap } from '@ooxml-test-region-map-renderer';
+  import { tiff } from '@ooxml-test-tiff-renderer';
+
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  const dpi = parseFloat(params.get('dpi') ?? '150');
+  const width = parseInt(params.get('width') ?? '1600', 10);
+  const height = parseInt(params.get('height') ?? '2100', 10);
+  const canvas = document.getElementById('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
+
+  try {
+    await document.fonts.ready;
+    const wb = await XlsxWorkbook.load('/bench-corpus/' + id,
+                                       { threeD, regionMap, tiff });
+    document.body.dataset.pageCount = String(wb.sheetCount);
+    document.body.dataset.sheetNames = JSON.stringify(wb.sheetNames);
+    // The viewer has no print pagination: it draws a scrollable grid. Render an
+    // A1-anchored viewport at the comparison DPI so the grid's own geometry --
+    // column widths and row heights -- can still be measured against the
+    // reference's first printed page.
+    window.benchRender = async (sheetIndex) => {
+      await wb.renderViewport(canvas, sheetIndex, { row: 1, col: 1, rows: 400, cols: 120 },
+                              { width, height, dpr: 1, cellScale: dpi / 96 });
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return { width: canvas.width, height: canvas.height,
+               headerW: Math.round(50 * (dpi / 96)), headerH: Math.round(22 * (dpi / 96)) };
+    };
+    document.body.dataset.status = 'ready';
+  } catch (e) {
+    document.body.dataset.status = 'error';
+    document.body.dataset.errorMessage = e instanceof Error ? e.message : String(e);
+  }
+</script>
+</body>
+</html>

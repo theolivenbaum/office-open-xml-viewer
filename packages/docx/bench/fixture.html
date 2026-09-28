@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>DOCX bench fixture</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { background: #ffffff; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script type="module">
+  import { DocxDocument } from '/src/index.ts';
+  import { threeD } from '@ooxml-test-three-d-renderer';
+  import { regionMap } from '@ooxml-test-region-map-renderer';
+  import { math } from '@ooxml-test-math-renderer';
+  import { tiff } from '@ooxml-test-tiff-renderer';
+
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  const dpi = parseFloat(params.get('dpi') ?? '150');
+  const canvas = document.getElementById('canvas');
+
+  try {
+    await document.fonts.ready;
+    const doc = await DocxDocument.load('/bench-corpus/' + id, { math, threeD, regionMap, tiff });
+    await doc.waitUntilLayoutComplete();
+    document.body.dataset.pageCount = String(doc.pageCount);
+    // Render at the reference's own resolution: the page's point size scaled to
+    // the comparison DPI, so no resampling stands between the two rasterisers.
+    window.benchRender = async (pageIndex) => {
+      const { widthPt, heightPt } = doc.pageSize(pageIndex);
+      const width = Math.max(1, Math.round((widthPt / 72) * dpi));
+      await doc.renderPage(canvas, pageIndex, { width, dpr: 1 });
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return { width: canvas.width, height: canvas.height, widthPt, heightPt };
+    };
+    document.body.dataset.status = 'ready';
+  } catch (e) {
+    document.body.dataset.status = 'error';
+    document.body.dataset.errorMessage = e instanceof Error ? e.message : String(e);
+  }
+</script>
+</body>
+</html>
